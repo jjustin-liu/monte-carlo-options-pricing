@@ -1,0 +1,79 @@
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+from scipy.stats import lognorm
+
+'''
+    ### Lognormal Distribution Of Stock Prices Under GBM ###
+
+    Uses Geometric Brownian Motion to iteratively calculate stock paths up to a certain point in time.
+    Then plots the final prices on a histogram against the theoretically matching lognormal distribution
+    to demonstrate how these are lognormally distributed. Also shows how the log of the stock price is normally
+    distributed. Stock parameters can be changed in main().
+'''
+
+IMAGES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'images')
+
+rng = np.random.default_rng(123)
+
+
+def GBMStockGenerator(s0, mu, sigma, dt, n=1):
+    dt_actual = dt / 365
+    times = np.arange(0, n, dt_actual)
+    intervals = len(times)
+    S = np.zeros(intervals)
+
+    z = np.random.standard_normal(intervals - 1)
+    dS_s = mu * dt_actual + sigma * z * math.sqrt(dt_actual)
+
+    S[0] = s0
+    for i in range(1, intervals):
+        S[i] = S[i-1] * (1 + dS_s[i-1])
+
+    return times, S
+
+
+def MonteCarlo(s0, mu, sigma, dt, n=1, runs=10):
+    final_prices = []
+    for run in range(runs):
+        times, S = GBMStockGenerator(s0, mu, sigma, dt, n)
+        final_prices.append(S[-1])
+    return np.array(final_prices)
+
+
+def getLogNormal(s0, mu, sigma, T, data):
+    x = np.linspace(min(data), max(data), 1000)
+    mean = math.log(s0) + ((mu - 0.5 * (sigma ** 2)) * T)
+    variance = (sigma ** 2) * T
+    pdf = lognorm.pdf(x, s=math.sqrt(variance), scale=np.exp(mean))
+    return x, pdf
+
+
+def main():
+    s0, mu, sigma, dt, n = 100, 0.15, 0.12, 1, 4
+
+    data = MonteCarlo(s0, mu, sigma, dt, n, 12000)
+    x, pdf = getLogNormal(s0, mu, sigma, n, data)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    axes[0].hist(data, 100, density=True)
+    axes[0].plot(x, pdf, 'r', linewidth=2, label="Lognormal PDF")
+    axes[0].set_xlabel('Terminal Price')
+    axes[0].set_ylabel('Frequency Density')
+    axes[0].set_title('Lognormal distribution of terminal stock prices')
+
+    axes[1].hist(np.log(data), 100, density=True)
+    axes[1].set_title('Log of Stock Price')
+    axes[1].set_xlabel('Log Terminal Price')
+    axes[1].set_ylabel('Frequency Density')
+
+    os.makedirs(IMAGES_DIR, exist_ok=True)
+    plt.savefig(os.path.join(IMAGES_DIR, 'lognormal.png'), dpi=150, bbox_inches='tight')
+    plt.show()
+
+
+if __name__ == '__main__':
+    main()
